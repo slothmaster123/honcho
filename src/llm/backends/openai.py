@@ -381,14 +381,34 @@ class OpenAIBackend:
         response_format: type[BaseModel],
     ) -> Any:
         structured_params = dict(params)
-        structured_params["response_format"] = {
-            "type": "json_schema",
-            "json_schema": {
-                "name": response_format.__name__,
-                "schema": response_format.model_json_schema(),
-            },
-        }
-        return await self._client.chat.completions.create(**structured_params)
+        # Try json_schema first, fall back to json_object for providers
+        # that don't support structured outputs (e.g., DeepSeek API)
+        try:
+            structured_params["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": response_format.__name__,
+                    "schema": response_format.model_json_schema(),
+                },
+            }
+            return await self._client.chat.completions.create(**structured_params)
+        except BadRequestError:
+            # Fallback: use json_object mode with schema in system prompt
+            schema_json = json.dumps(response_format.model_json_schema())
+            structured_params["response_format"] = {"type": "json_object"}
+            # Inject schema instruction into the last user message or add system message
+            msgs = list(structured_params.get("messages", []))
+            schema_instruction = {
+                "role": "system",
+                "content": f"You must respond with a JSON object matching this schema:\n{schema_json}\nDo not include any text outside the JSON object.",
+            }
+            # Insert as first message if no system message, otherwise append to system
+            if msgs and msgs[0]["role"] == "system":
+                msgs[0]["content"] = msgs[0]["content"] + "\n\n" + schema_instruction["content"]
+            else:
+                msgs.insert(0, schema_instruction)
+            structured_params["messages"] = msgs
+            return await self._client.chat.completions.create(**structured_params)
 
     @staticmethod
     def _parse_or_repair_structured_content(

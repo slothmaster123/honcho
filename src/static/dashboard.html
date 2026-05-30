@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Honcho Memory Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc', 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 800: '#3730a3', 900: '#312e81' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+        .glow { box-shadow: 0 0 20px rgba(99, 102, 241, 0.15); }
+        .card { @apply bg-gray-800 rounded-xl border border-gray-700 p-5 transition-all; }
+        .card:hover { @apply border-gray-600; }
+        .stat-value { @apply text-3xl font-bold text-white; }
+        .stat-label { @apply text-sm text-gray-400 uppercase tracking-wider; }
+        .badge { @apply px-2 py-0.5 rounded-full text-xs font-medium; }
+        .badge-green { @apply bg-emerald-900/50 text-emerald-400 border border-emerald-700/50; }
+        .badge-blue { @apply bg-blue-900/50 text-blue-400 border border-blue-700/50; }
+        .badge-purple { @apply bg-purple-900/50 text-purple-400 border border-purple-700/50; }
+        .badge-amber { @apply bg-amber-900/50 text-amber-400 border border-amber-700/50; }
+        .search-highlight { background: rgba(99,102,241,0.3); padding: 1px 3px; border-radius: 3px; }
+        tr { @apply border-b border-gray-700/50; }
+        tr:last-child { border-bottom: none; }
+        td { @apply px-4 py-3; }
+        th { @apply px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+        .pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-200 min-h-screen">
+
+    <!-- Header -->
+    <header class="border-b border-gray-800 bg-gray-900/50 backdrop-blur sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <svg class="w-8 h-8 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+                </svg>
+                <div>
+                    <h1 class="text-xl font-bold text-white">Honcho</h1>
+                    <p class="text-xs text-gray-500">AI-Native Memory Dashboard</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div id="status-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400 pulse"></div>
+                <span id="status-text" class="text-sm text-gray-400">Connected</span>
+                <button onclick="refreshAll()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-lg transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    Refresh
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-8">
+
+        <!-- Stats Row -->
+        <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8" id="stats-row">
+            <div class="card glow">
+                <div class="stat-label">Peers</div>
+                <div class="stat-value" id="stat-peers">—</div>
+                <div class="text-xs text-gray-500 mt-1">Tracked identities</div>
+            </div>
+            <div class="card glow">
+                <div class="stat-label">Sessions</div>
+                <div class="stat-value" id="stat-sessions">—</div>
+                <div class="text-xs text-gray-500 mt-1">Conversation contexts</div>
+            </div>
+            <div class="card glow">
+                <div class="stat-label">Conclusions</div>
+                <div class="stat-value" id="stat-conclusions">—</div>
+                <div class="text-xs text-gray-500 mt-1">Stored facts</div>
+            </div>
+            <div class="card glow">
+                <div class="stat-label">Queue</div>
+                <div class="stat-value" id="stat-queue">—</div>
+                <div class="text-xs text-gray-500 mt-1"><span id="stat-queue-done">0</span>/<span id="stat-queue-total">0</span> processed</div>
+            </div>
+        </section>
+
+        <!-- Search -->
+        <section class="mb-8">
+            <div class="card">
+                <label class="block text-sm font-medium text-gray-300 mb-2">Semantic Search</label>
+                <div class="flex gap-3">
+                    <input type="text" id="search-input" placeholder="Search conclusions about you..." 
+                           class="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition"
+                           onkeydown="if(event.key==='Enter')searchConclusions()">
+                    <button onclick="searchConclusions()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition text-sm font-medium">
+                        Search
+                    </button>
+                </div>
+                <div id="search-results" class="mt-4 hidden"></div>
+            </div>
+        </section>
+
+        <!-- Two-column layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- Peers Panel -->
+            <section>
+                <h2 class="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
+                    Peers
+                </h2>
+                <div id="peers-container" class="space-y-3">
+                    <div class="card"><p class="text-gray-500 text-sm">Loading...</p></div>
+                </div>
+            </section>
+
+            <!-- Sessions Panel -->
+            <section>
+                <h2 class="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" /></svg>
+                    Sessions
+                </h2>
+                <div id="sessions-container" class="space-y-3">
+                    <div class="card"><p class="text-gray-500 text-sm">Loading...</p></div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Conclusions Table -->
+        <section class="mt-8">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-lg font-semibold text-white flex items-center gap-2">
+                    <svg class="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+                    Recent Conclusions
+                </h2>
+                <span class="text-xs text-gray-500" id="conclusion-count">0 total</span>
+            </div>
+            <div class="card overflow-x-auto" style="max-height: 500px; overflow-y: auto;">
+                <table class="w-full text-sm">
+                    <thead class="sticky top-0 bg-gray-800">
+                        <tr>
+                            <th>Observer</th>
+                            <th>About</th>
+                            <th>Content</th>
+                            <th class="text-right">When</th>
+                        </tr>
+                    </thead>
+                    <tbody id="conclusions-body">
+                        <tr><td colspan="4" class="text-center text-gray-500 py-8">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="border-t border-gray-800 mt-12 py-6 text-center text-xs text-gray-600">
+        Honcho v<span id="honcho-version">?</span> &middot; 
+        Workspace: <span id="workspace-name" class="text-gray-500">hermes</span> &middot;
+        API: <span id="api-url" class="text-gray-500">http://localhost:8000</span>
+    </footer>
+
+    <script>
+        const API = window.location.origin;
+        const WORKSPACE = 'hermes';
+
+        function fmtDate(iso) {
+            const d = new Date(iso);
+            return d.toLocaleString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+        }
+
+        function shortId(id) {
+            return id.length > 12 ? id.slice(0, 8) + '...' : id;
+        }
+
+        async function apiCall(method, path, body) {
+            const opts = { method, headers: { 'Content-Type': 'application/json' } };
+            if (body) opts.body = JSON.stringify(body);
+            const res = await fetch(`${API}${path}`, opts);
+            if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+            return res.json();
+        }
+
+        async function loadStats() {
+            const [peers, sessions, queue, conclusions] = await Promise.all([
+                apiCall('POST', `/v3/workspaces/${WORKSPACE}/peers/list`, {}),
+                apiCall('POST', `/v3/workspaces/${WORKSPACE}/sessions/list`, {}),
+                apiCall('GET', `/v3/workspaces/${WORKSPACE}/queue/status`),
+                apiCall('POST', `/v3/workspaces/${WORKSPACE}/conclusions/list`, { size: 1 }),
+            ]);
+            
+            document.getElementById('stat-peers').textContent = peers.total || peers.items?.length || 0;
+            document.getElementById('stat-sessions').textContent = sessions.total || sessions.items?.length || 0;
+            document.getElementById('stat-conclusions').textContent = conclusions.total || 0;
+            document.getElementById('stat-queue').textContent = queue.pending_work_units || 0;
+            document.getElementById('stat-queue-done').textContent = queue.completed_work_units || 0;
+            document.getElementById('stat-queue-total').textContent = queue.total_work_units || 0;
+            document.getElementById('conclusion-count').textContent = `${conclusions.total || 0} total`;
+            
+            // Status dot
+            const dot = document.getElementById('status-dot');
+            const statusText = document.getElementById('status-text');
+            if (queue.pending_work_units > 0) {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 pulse';
+                statusText.textContent = `Processing (${queue.pending_work_units} pending)`;
+            } else {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
+                statusText.textContent = 'All caught up';
+            }
+
+            return { peers, sessions, queue };
+        }
+
+        async function loadPeers() {
+            const data = await apiCall('POST', `/v3/workspaces/${WORKSPACE}/peers/list`, {});
+            const container = document.getElementById('peers-container');
+            
+            if (!data.items || data.items.length === 0) {
+                container.innerHTML = '<div class="card"><p class="text-gray-500 text-sm">No peers yet</p></div>';
+                return;
+            }
+
+            container.innerHTML = data.items.map(p => `
+                <div class="card">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-full bg-indigo-900 flex items-center justify-center text-indigo-300 font-bold text-sm">
+                                ${p.id[0].toUpperCase()}
+                            </div>
+                            <span class="font-medium text-white">${p.id}</span>
+                        </div>
+                        <span class="badge ${p.id === WORKSPACE ? 'badge-purple' : p.id === 'hermes' ? 'badge-blue' : 'badge-green'}">${p.id === WORKSPACE ? 'workspace' : p.id === 'hermes' ? 'agent' : 'human'}</span>
+                    </div>
+                    <div class="text-xs text-gray-500">Created ${fmtDate(p.created_at)}</div>
+                </div>
+            `).join('');
+        }
+
+        async function loadSessions() {
+            const data = await apiCall('POST', `/v3/workspaces/${WORKSPACE}/sessions/list`, {});
+            const container = document.getElementById('sessions-container');
+
+            if (!data.items || data.items.length === 0) {
+                container.innerHTML = '<div class="card"><p class="text-gray-500 text-sm">No sessions yet</p></div>';
+                return;
+            }
+
+            // Get queue data for session-level stats
+            const queue = await apiCall('GET', `/v3/workspaces/${WORKSPACE}/queue/status`);
+            const sessionQueue = queue.sessions || {};
+
+            container.innerHTML = data.items.map(s => {
+                const sq = sessionQueue[s.id] || {};
+                return `
+                <div class="card">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-medium text-white text-sm">${s.id}</span>
+                        <span class="text-xs text-gray-500">${fmtDate(s.created_at)}</span>
+                    </div>
+                    <div class="flex gap-3 text-xs text-gray-400">
+                        ${sq.total_work_units ? `<span>🔨 ${sq.completed_work_units || 0}/${sq.total_work_units} processed</span>` : ''}
+                        ${s.metadata?.peer_count ? `<span>👥 ${s.metadata.peer_count} peers</span>` : ''}
+                    </div>
+                </div>
+            `}).join('');
+        }
+
+        async function loadConclusions() {
+            const data = await apiCall('POST', `/v3/workspaces/${WORKSPACE}/conclusions/list`, { size: 50 });
+            const tbody = document.getElementById('conclusions-body');
+
+            if (!data.items || data.items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-gray-500 py-8">No conclusions yet — send some messages!</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.items.map(c => `
+                <tr>
+                    <td><span class="badge badge-blue">${c.observer_id}</span></td>
+                    <td><span class="badge badge-green">${c.observed_id}</span></td>
+                    <td class="text-gray-300 max-w-md truncate" title="${c.content.replace(/"/g, '&quot;')}">${c.content}</td>
+                    <td class="text-right text-xs text-gray-500 whitespace-nowrap">${fmtDate(c.created_at)}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function searchConclusions() {
+            const query = document.getElementById('search-input').value.trim();
+            const resultsDiv = document.getElementById('search-results');
+            
+            if (!query) {
+                resultsDiv.classList.add('hidden');
+                return;
+            }
+
+            resultsDiv.classList.remove('hidden');
+            resultsDiv.innerHTML = '<p class="text-gray-400 text-sm">Searching...</p>';
+
+            try {
+                const data = await apiCall('POST', `/v3/workspaces/${WORKSPACE}/conclusions/query`, {
+                    query: query,
+                    size: 10,
+                });
+
+                if (!data.items || data.items.length === 0) {
+                    resultsDiv.innerHTML = '<p class="text-gray-500 text-sm">No matches found.</p>';
+                    return;
+                }
+
+                resultsDiv.innerHTML = `
+                    <h4 class="text-sm font-medium text-gray-300 mb-2">${data.items.length} results for "${query}"</h4>
+                    <div class="space-y-2 max-h-64 overflow-y-auto">
+                        ${data.items.map(c => `
+                            <div class="bg-gray-900 rounded-lg p-3 border border-gray-700">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="badge badge-blue text-xs">${c.observer_id}</span>
+                                    <span class="text-xs text-gray-500">→</span>
+                                    <span class="badge badge-green text-xs">${c.observed_id}</span>
+                                </div>
+                                <p class="text-sm text-gray-300">${c.content}</p>
+                                <p class="text-xs text-gray-500 mt-1">${fmtDate(c.created_at)}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } catch (e) {
+                resultsDiv.innerHTML = `<p class="text-red-400 text-sm">Search failed: ${e.message}</p>`;
+            }
+        }
+
+        async function refreshAll() {
+            document.getElementById('status-dot').className = 'w-2.5 h-2.5 rounded-full bg-amber-400 pulse';
+            document.getElementById('status-text').textContent = 'Refreshing...';
+            
+            try {
+                await Promise.all([
+                    loadStats(),
+                    loadPeers(),
+                    loadSessions(),
+                    loadConclusions(),
+                ]);
+            } catch (e) {
+                document.getElementById('status-dot').className = 'w-2.5 h-2.5 rounded-full bg-red-400';
+                document.getElementById('status-text').textContent = `Error: ${e.message}`;
+                return;
+            }
+        }
+
+        // Init
+        window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('api-url').textContent = API;
+            refreshAll();
+            // Auto-refresh every 30s
+            setInterval(refreshAll, 30000);
+        });
+    </script>
+</body>
+</html>

@@ -9,7 +9,7 @@ import sentry_sdk
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi_pagination import add_pagination
 from pydantic import ValidationError
 from sentry_sdk.integrations.fastapi import FastApiIntegration
@@ -178,6 +178,8 @@ app = FastAPI(
 origins = [
     "http://localhost",
     "http://127.0.0.1:8000",
+    "http://100.126.12.94:8000",
+    "http://10.0.0.186:8000",
     "https://api.honcho.dev",
 ]
 
@@ -208,6 +210,17 @@ app.add_route("/metrics", metrics_endpoint, methods=["GET"])
 async def health_check():
     """Health check endpoint for monitoring and container orchestration."""
     return {"status": "ok"}
+
+
+@app.get("/", response_class=HTMLResponse)
+async def dashboard():
+    """Serve the Honcho memory dashboard."""
+    from pathlib import Path
+
+    dashboard_path = Path(__file__).parent / "static" / "dashboard.html"
+    if dashboard_path.exists():
+        return dashboard_path.read_text()
+    return HTMLResponse("<h1>Dashboard not found</h1>", status_code=404)
 
 
 # Global exception handlers
